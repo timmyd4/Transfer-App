@@ -152,49 +152,205 @@ npm run build
 
 ## How it works / project structure
 
-```
-src/
-  lib/
-    supabaseClient.js   Creates the Supabase client from your .env values
-    device.js           Remembers "Phone" or "PC" in localStorage
-    uploadFile.js        Uploads a file to Storage + inserts its DB row
-    downloadFile.js       Creates a signed URL and opens it
-    deleteFile.js          Removes the Storage object + DB row
-    fileMeta.js             Formats file size, type label, and dates
-    useFiles.js               Fetches the file list + realtime subscription
-    useUpload.js               Upload state (in progress / error) as a hook
-  context/
-    AuthContext.jsx      Tracks whether you're logged in, app-wide
-    useAuth.js            Hook to read that login state anywhere
-  components/
-    ProtectedRoute.jsx   Redirects to /login if you're not signed in
-    Header.jsx           Top bar with the current device + settings link
-    Toolbar.jsx           "Upload File" button + drag-and-drop hint
-    FileTable.jsx          The sortable file list (Explorer "Details" view)
-    FileIcon.jsx             Small icon, tinted by file category
-    DetailsPane.jsx            Selected file's info + download/delete
-  pages/
-    LoginPage.jsx        Email + password login (and one-time sign up)
-    HomePage.jsx         The main file explorer screen
-    SettingsPage.jsx     Change device name, log out
-supabase/
-  schema.sql             Run this once in the Supabase SQL editor
-.github/workflows/
-  deploy.yml              Builds and publishes to GitHub Pages on every push
-```
+The big picture: every uploaded file is one row in Supabase's `messages`
+table (name, size, type, which device sent it, when). Row Level Security
+makes sure Supabase only ever returns *your* rows to *you* — even though the
+app uses a public anon key in the browser, nobody else can read or write your
+data. The files themselves live in a private Storage bucket and are only
+ever accessed through short-lived signed download links, never a public URL.
 
-Every uploaded file is one row in the `messages` table (name, size, type,
-which device sent it, and when). Row Level Security makes sure Supabase only
-ever returns *your* rows to *you* — even though the app uses a public anon
-key in the browser, nobody else can read or write your data. The files
-themselves live in a private Storage bucket, and are only ever accessed
-through short-lived signed download links.
+Below is what every file in this project does, and *why* it exists as its
+own piece rather than being lumped into something bigger.
 
-Click a file in the list to select it and see its details (type, size,
-who sent it, exact upload date/time) in the pane beside the list (or below
-it on a phone). Double-click a row, or use the Download button, to open it.
-You can also drag a file straight from your desktop into the list to upload
-it, or press Delete on your keyboard while a file is selected.
+### Entry point & routing
+
+- **`src/main.jsx`** — Boots React: finds the `<div id="root">` in
+  `index.html` and renders `<App />` into it. This is the one file every
+  Vite + React project starts from.
+- **`src/App.jsx`** — Defines the three pages/routes (`/login`, `/`,
+  `/settings`) and wraps them in `AuthProvider` so login state is available
+  everywhere. Uses **`HashRouter`** (URLs like `#/settings`) instead of the
+  more common `BrowserRouter` *because* GitHub Pages only serves static
+  files — a real route like `/settings` would 404 on refresh since there's
+  no server to redirect it back to `index.html`. Hash routes never leave
+  `index.html`, so they always work.
+
+### `src/context/` — who's logged in, app-wide
+
+- **`auth-context.js`** — Just `createContext()`. Split into its own file
+  (instead of living in `AuthContext.jsx`) because of an ESLint rule
+  (`react-refresh/only-export-components`) that wants files exporting a
+  component to *only* export that component — mixing in a plain
+  context/hook export breaks React Fast Refresh during development.
+- **`AuthContext.jsx`** — The `<AuthProvider>` component. On load it asks
+  Supabase for any existing session (`supabase.auth.getSession()`) so
+  reopening the installed app doesn't force a fresh login, then subscribes
+  to `supabase.auth.onAuthStateChange()` so every page reacts instantly the
+  moment you log in or out. Exposes `{ session, user, loading, signOut }`.
+- **`useAuth.js`** — The `useAuth()` hook other components call to read
+  that context. Throws a clear error if used outside `<AuthProvider>`,
+  which turns "silent undefined bug" into "obvious error message" the
+  moment you make a mistake.
+
+### `src/lib/` — logic with no UI in it
+
+Kept separate from components so the *rules* (how uploading works, how
+dates are formatted) can be tested, reused, or changed without touching any
+JSX.
+
+- **`supabaseClient.js`** — Creates the one shared Supabase client from
+  your `.env` values (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) and
+  exports `ATTACHMENTS_BUCKET = 'attachments'` as a single source of truth
+  for the bucket name, so it's never typo'd in two places. Logs a clear
+  console error if the env vars are missing instead of failing silently.
+- **`device.js`** — `getDeviceName()` / `setDeviceName()` wrap
+  `localStorage` in try/catch (private browsing can throw on access) and
+  define `DEVICE_OPTIONS = ['Phone', 'PC']` once, so the Settings page and
+  the first-run prompt always show the same two choices.
+- **`uploadFile.js`** — `uploadFile({ user, file, device })` does the two
+  things every upload needs, in order: push the bytes to Storage at
+  `<user.id>/<random>-<filename>`, then insert the matching database row
+  (name, size, MIME type, device). Rejects anything over 20MB
+  (`MAX_FILE_SIZE_BYTES`) *before* uploading, so you don't wait on a big
+  transfer just to have it rejected. One function, so the Toolbar button
+  and the drag-and-drop handler can't drift out of sync with each other.
+- **`downloadFile.js`** — `downloadFile(file)` asks Supabase Storage for a
+  60-second signed URL and opens it. A private bucket has no public URLs by
+  design, so every single download has to mint one of these on the spot.
+  Centralized here because both the details pane's Download button *and*
+  double-clicking a row need identical behavior.
+- **`deleteFile.js`** — `deleteFile(file)` removes the Storage object
+  *and* the database row. Deletes the file first: if that step fails, the
+  row stays and you still have your data; if the row-delete failed first
+  and Storage succeeded, you'd have a "ghost" database entry pointing at a
+  file that no longer exists.
+- **`fileMeta.js`** — Pure formatting, no network calls:
+  - `formatBytes(bytes)` → `"1.4 MB"` style human-readable sizes.
+  - `getFileKind(fileType, fileName)` → turns a MIME type/extension into a
+    friendly label (`"PNG Image"`, `"PDF Document"`) *and* an icon
+    category, which is what picks the color/shape in `FileIcon.jsx`.
+  - `formatDateShort(iso)` → compact date for the table column.
+  - `formatDateLong(iso)` → `{ date, time }` split out for the details
+    pane, matching your ask for "the date, time, and other good details"
+    to be clearly separated rather than one crammed timestamp string.
+- **`useFiles.js`** — The `useFiles(sort)` hook: fetches the file list once
+  on load, then keeps it live by subscribing to Supabase Realtime
+  `postgres_changes` (INSERT/DELETE) so a file uploaded from your phone
+  appears on your PC instantly with no refresh. Also holds the
+  column-sort logic (`compareFiles`/`rawCompare`) — sorting happens on the
+  already-fetched list in the browser rather than re-querying Supabase
+  every time you click a column header, which is instant and needs no
+  extra network round-trip.
+- **`useUpload.js`** — Wraps `uploadFile()` in React state
+  (`uploading`, `error`) so any component can trigger an upload and
+  automatically get a loading spinner / error message for free, without
+  re-implementing that state itself.
+
+### `src/components/` — reusable pieces of UI
+
+- **`Header.jsx`** — Top bar: app title, a badge showing which device
+  you're on (from `device.js`), and a link to Settings. Reads the device
+  name directly rather than through props since it's purely informational
+  and every page that renders `<Header>` needs it the same way.
+- **`ProtectedRoute.jsx`** — A wrapper component: shows a loading state
+  while auth is still resolving, redirects to `/login` if there's no
+  session, otherwise renders its children. Centralizing this in one place
+  means `App.jsx` can guard both `/` and `/settings` with a single
+  one-line wrapper each instead of repeating the same login check in every
+  page component.
+- **`Toolbar.jsx`** — The "+ Upload File" button and its hidden
+  `<input type="file">`. Clicking the visible button programmatically
+  clicks the invisible file input (`inputRef.current.click()`) because
+  native file inputs are impossible to style consistently across
+  browsers — this gives you a normal-looking button with the browser's
+  real file picker underneath. Resets the input's value after every pick
+  so choosing the *same* file twice in a row still fires a change event.
+- **`FileIcon.jsx`** — One small SVG document icon whose color changes via
+  a CSS class (`file-icon-image`, `file-icon-document`, etc.) based on the
+  `category` from `getFileKind()`. A single component instead of five
+  separate icon files, since the shape is identical and only the color
+  needs to change.
+- **`FileTable.jsx`** — The actual "Details view" table: Name / From /
+  Date Uploaded / Type / Size columns. Clicking a header calls `onSort`
+  with that column's key; the active column shows a ▲/▼ arrow. Clicking a
+  row selects it (opens the details pane); double-clicking a row calls
+  `downloadFile()` directly, mirroring how double-click "opens" a file in
+  a real file explorer.
+- **`DetailsPane.jsx`** — Shows the selected file's icon, name, type,
+  size, sender device, and full upload date + time (this is the piece
+  that directly answers your request for "details when it was uploaded,
+  the date, time, and other good details"), plus Download and Delete
+  buttons. It's a `<dl>` (description list) rather than a table — the
+  semantically correct HTML element for "a list of label/value pairs,"
+  which also gets sensible default screen-reader behavior for free.
+
+### `src/pages/` — one component per route
+
+- **`LoginPage.jsx`** — Email/password form that toggles between "Log In"
+  and "Sign Up" mode. Sign-up is included so you can create your one
+  account through the app itself if you'd rather not use the Supabase
+  dashboard for it — but per the setup steps above, you turn off public
+  sign-ups in Supabase afterward, so this form stops accepting new
+  accounts once you've made yours.
+- **`HomePage.jsx`** — The main screen. Owns the pieces that need to be
+  shared between the table and the details pane: which file is selected
+  (`selectedId`), the current sort, and drag-state for the drop zone. On
+  first visit on a new device it shows the "Which device is this?" prompt
+  before anything else, since every uploaded file needs that label. Wires
+  the whole-page `onDrop` handler so you can drag a file from your desktop
+  anywhere onto the list, and a `Delete` keypress on the container so you
+  can remove the selected file without reaching for the mouse.
+- **`SettingsPage.jsx`** — Change the device label and log out. Kept
+  separate from Home instead of a settings modal so it has its own URL
+  (`#/settings`) you can navigate to/from directly.
+
+### `supabase/schema.sql` — the database setup script
+
+Run once in Supabase's SQL editor; safe to re-run any time (every
+statement uses `if not exists` / `drop policy if exists` first).
+
+- **`create table messages`** — one row per file: `user_id`, `file_path`,
+  `file_name`, `file_size`, `file_type`, `device`, `created_at`.
+  `user_id` defaults to `auth.uid()` so you never have to set it yourself
+  from the app — the database fills it in from your login session.
+- **Row Level Security policies** (`for select` / `insert` / `delete`,
+  each `using (auth.uid() = user_id)`) — this is the actual security
+  boundary. Even though the browser holds a key anyone could technically
+  find in your page's network requests, Postgres itself refuses to return
+  or modify a row that isn't yours. This is *why* it's safe to use a
+  public anon key in a client-side app at all.
+- **`alter publication supabase_realtime add table public.messages`** —
+  turns on the live-update stream `useFiles.js` subscribes to. Without
+  this line, uploads would only ever show up after a manual refresh.
+- **Storage bucket + policies** — creates the private `attachments`
+  bucket and three matching policies (read/upload/delete) that check
+  `auth.uid()::text = (storage.foldername(name))[1]` — i.e. the first
+  folder in the file's path must equal your user ID. This is the storage
+  equivalent of the RLS policies above, and is why files are uploaded to
+  `<user.id>/<filename>` rather than just `<filename>`.
+
+### `.github/workflows/deploy.yml` — automatic deployment
+
+Runs on every push to `main`: installs dependencies, runs `npm run build`
+(injecting your two GitHub secrets as env vars so the built site has your
+real Supabase URL/key baked in), then publishes the result to GitHub
+Pages. This exists so you never have to manually build and upload files —
+push code, and the live site updates itself within a minute or two.
+
+### `vite.config.js` and the PWA setup
+
+- `base: '/Transfer-App/'` — tells Vite every asset URL (JS, CSS, icons)
+  needs that folder prefix, because GitHub Pages serves your repo at
+  `github.io/<repo-name>/`, not at the domain root.
+- The `VitePWA` plugin generates the web app manifest (name, icons, theme
+  color, `display: 'standalone'`) and a service worker at build time —
+  this is the entire mechanism that makes "Install app" show up in
+  Chrome/Edge/Brave and lets the app open in its own window instead of a
+  browser tab.
+- **`public/pwa-192x192.png`, `public/pwa-512x512.png`** — the placeholder
+  app icons (a white "T" on indigo) referenced by that manifest. Generated
+  as raw PNG bytes by a one-off script rather than a design tool, since
+  they're meant as a placeholder you can swap out later.
 
 ### Ideas for later
 - Add columns to sort by, or a search/filter box, for a big file list

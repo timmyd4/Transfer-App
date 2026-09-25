@@ -17,7 +17,7 @@ export default defineConfig({
       manifest: {
         name: 'Transfer App',
         short_name: 'Transfer',
-        description: 'Send messages and small files between your phone and your computer.',
+        description: 'Send small files between your phone and your computer.',
         theme_color: '#6366f1',
         background_color: '#0f172a',
         display: 'standalone',
