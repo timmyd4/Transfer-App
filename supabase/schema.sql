@@ -41,7 +41,17 @@ create policy "Users can delete own messages"
 
 -- 3. Realtime: broadcast changes to this table live ----------------------
 
-alter publication supabase_realtime add table public.messages;
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'messages'
+  ) then
+    alter publication supabase_realtime add table public.messages;
+  end if;
+end $$;
 
 -- 4. Storage: a PRIVATE bucket for file attachments -----------------------
 -- Files are stored at "<user_id>/<random>-<filename>" so each user's
