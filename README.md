@@ -275,14 +275,23 @@ JSX.
   with that column's key; the active column shows a ▲/▼ arrow. Clicking a
   row selects it (opens the details pane); double-clicking a row calls
   `downloadFile()` directly, mirroring how double-click "opens" a file in
-  a real file explorer.
+  a real file explorer. The Name column has a fixed width and truncates
+  long names with `...` (`text-overflow: ellipsis` in `index.css`) so the
+  other columns stay readable — the `title={file.file_name}` attribute on
+  that cell means hovering it shows the *full* name as your browser's
+  native tooltip, no truncation guessing required.
 - **`DetailsPane.jsx`** — Shows the selected file's icon, name, type,
   size, sender device, and full upload date + time (this is the piece
   that directly answers your request for "details when it was uploaded,
   the date, time, and other good details"), plus Download and Delete
   buttons. It's a `<dl>` (description list) rather than a table — the
   semantically correct HTML element for "a list of label/value pairs,"
-  which also gets sensible default screen-reader behavior for free.
+  which also gets sensible default screen-reader behavior for free. The
+  name here is never truncated (it wraps instead, via `word-break:
+  break-word`), and a **Copy full name** button next to it calls
+  `navigator.clipboard.writeText()` so you can paste the exact filename
+  into another app (Notepad, a search box, a chat) when you need to read
+  or search for something that got cut off in the table.
 
 ### `src/pages/` — one component per route
 

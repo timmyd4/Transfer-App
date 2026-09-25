@@ -6,6 +6,7 @@ import FileIcon from './FileIcon'
 export default function DetailsPane({ file, onClose, onDelete }) {
   const [downloading, setDownloading] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const kind = getFileKind(file.file_type, file.file_name)
   const { date, time } = formatDateLong(file.created_at)
@@ -14,6 +15,16 @@ export default function DetailsPane({ file, onClose, onDelete }) {
     setDownloading(true)
     await downloadFile(file)
     setDownloading(false)
+  }
+
+  async function handleCopyName() {
+    try {
+      await navigator.clipboard.writeText(file.file_name)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      alert('Could not copy - your browser blocked clipboard access.')
+    }
   }
 
   async function handleDelete() {
@@ -34,6 +45,9 @@ export default function DetailsPane({ file, onClose, onDelete }) {
       <div className="details-icon-row">
         <FileIcon category={kind.category} size={40} />
         <p className="details-file-name">{file.file_name}</p>
+        <button type="button" className="btn-link" onClick={handleCopyName}>
+          {copied ? 'Copied!' : 'Copy full name'}
+        </button>
       </div>
 
       <dl className="details-list">

@@ -37,7 +37,9 @@ export default function FileTable({ files, selectedId, onSelect, sort, onSort })
             >
               <td className="col-name">
                 <FileIcon category={kind.category} />
-                <span className="file-name-text">{file.file_name}</span>
+                <span className="file-name-text" title={file.file_name}>
+                  {file.file_name}
+                </span>
               </td>
               <td className="col-device">
                 <span className={`device-tag device-tag-${file.device?.toLowerCase()}`}>
