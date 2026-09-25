@@ -2,17 +2,23 @@
 -- Paste this whole file into the Supabase SQL Editor and click "Run".
 -- It is safe to run more than once.
 
--- 1. The messages table -------------------------------------------------
+-- 1. The messages table (stores one row per uploaded file) --------------
 
 create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
-  content text,
   file_path text,
   file_name text,
+  file_size bigint,
+  file_type text,
   device text not null,
   created_at timestamptz not null default now()
 );
+
+-- If you ran an earlier version of this file, these add the new columns
+-- without touching your existing rows.
+alter table public.messages add column if not exists file_size bigint;
+alter table public.messages add column if not exists file_type text;
 
 -- 2. Row Level Security: everyone can only see/change their OWN rows ----
 

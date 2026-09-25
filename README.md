@@ -1,7 +1,9 @@
 # Transfer App
 
-A private, personal web app for sending text messages and small files between
-your phone and your computer in real time. Only you can log in.
+A private, personal web app for sending small files between your phone and
+your computer in real time. It looks like a File Explorer "Details" view:
+a sortable file list plus a details pane showing type, size and upload time.
+Only you can log in.
 
 - **Frontend:** React + Vite
 - **Backend:** Supabase (Auth, Database, Realtime, Storage) — free tier
@@ -155,18 +157,25 @@ src/
   lib/
     supabaseClient.js   Creates the Supabase client from your .env values
     device.js           Remembers "Phone" or "PC" in localStorage
+    uploadFile.js        Uploads a file to Storage + inserts its DB row
+    downloadFile.js       Creates a signed URL and opens it
+    deleteFile.js          Removes the Storage object + DB row
+    fileMeta.js             Formats file size, type label, and dates
+    useFiles.js               Fetches the file list + realtime subscription
+    useUpload.js               Upload state (in progress / error) as a hook
   context/
     AuthContext.jsx      Tracks whether you're logged in, app-wide
     useAuth.js            Hook to read that login state anywhere
   components/
     ProtectedRoute.jsx   Redirects to /login if you're not signed in
     Header.jsx           Top bar with the current device + settings link
-    MessageList.jsx      Fetches messages + subscribes to realtime updates
-    MessageItem.jsx      One message bubble (text/file, delete, download)
-    MessageInput.jsx     The text box + file picker + send button
+    Toolbar.jsx           "Upload File" button + drag-and-drop hint
+    FileTable.jsx          The sortable file list (Explorer "Details" view)
+    FileIcon.jsx             Small icon, tinted by file category
+    DetailsPane.jsx            Selected file's info + download/delete
   pages/
     LoginPage.jsx        Email + password login (and one-time sign up)
-    HomePage.jsx         The main chat screen
+    HomePage.jsx         The main file explorer screen
     SettingsPage.jsx     Change device name, log out
 supabase/
   schema.sql             Run this once in the Supabase SQL editor
@@ -174,14 +183,21 @@ supabase/
   deploy.yml              Builds and publishes to GitHub Pages on every push
 ```
 
-Messages are stored in a single `messages` table. Row Level Security makes
-sure Supabase only ever returns *your* rows to *you* — even though the app
-uses a public anon key in the browser, nobody else can read or write your
-data. File attachments go into a private Storage bucket, and are only ever
-accessed through short-lived signed download links.
+Every uploaded file is one row in the `messages` table (name, size, type,
+which device sent it, and when). Row Level Security makes sure Supabase only
+ever returns *your* rows to *you* — even though the app uses a public anon
+key in the browser, nobody else can read or write your data. The files
+themselves live in a private Storage bucket, and are only ever accessed
+through short-lived signed download links.
+
+Click a file in the list to select it and see its details (type, size,
+who sent it, exact upload date/time) in the pane beside the list (or below
+it on a phone). Double-click a row, or use the Download button, to open it.
+You can also drag a file straight from your desktop into the list to upload
+it, or press Delete on your keyboard while a file is selected.
 
 ### Ideas for later
-- Show a "someone is typing" indicator using Supabase Presence
+- Add columns to sort by, or a search/filter box, for a big file list
 - Support pasting an image directly from the clipboard
 - Add push notifications when a new message arrives
 - Show upload progress for large files
