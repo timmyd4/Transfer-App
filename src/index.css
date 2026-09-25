@@ -382,16 +382,23 @@ button {
 
 .col-name {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
-  max-width: 0; /* let flex + ellipsis work inside a table cell */
   width: 40%;
 }
 
+/* Unlike the other columns, names are never truncated - wrap instead so
+   the full name is always readable straight from the list. This needs to
+   be at least as specific as the ".file-table td" rule above to win. */
+.file-table td.col-name {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
 .file-name-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  padding-top: 0.1rem;
 }
 
 .file-icon-image {

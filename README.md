@@ -275,11 +275,12 @@ JSX.
   with that column's key; the active column shows a ▲/▼ arrow. Clicking a
   row selects it (opens the details pane); double-clicking a row calls
   `downloadFile()` directly, mirroring how double-click "opens" a file in
-  a real file explorer. The Name column has a fixed width and truncates
-  long names with `...` (`text-overflow: ellipsis` in `index.css`) so the
-  other columns stay readable — the `title={file.file_name}` attribute on
-  that cell means hovering it shows the *full* name as your browser's
-  native tooltip, no truncation guessing required.
+  a real file explorer. The Name column never truncates — long names wrap
+  onto a second line (`overflow-wrap: anywhere` in `index.css`) instead of
+  being cut off with `...`, so you can always read the full name directly
+  in the list without clicking anything. The `title={file.file_name}`
+  attribute on that cell is a small bonus on top: hovering it also shows
+  the name as your browser's native tooltip.
 - **`DetailsPane.jsx`** — Shows the selected file's icon, name, type,
   size, sender device, and full upload date + time (this is the piece
   that directly answers your request for "details when it was uploaded,
