@@ -1,14 +1,14 @@
 :root {
   color-scheme: dark;
-  --bg: #0f172a;
-  --surface: #1e293b;
-  --surface-hover: #273449;
-  --border: #334155;
-  --text: #e2e8f0;
-  --text-muted: #94a3b8;
-  --accent: #6366f1;
-  --accent-hover: #4f46e5;
-  --danger: #f87171;
+  --bg: #121212;
+  --surface: #1e1e1c;
+  --surface-hover: #2a2826;
+  --border: #3d3a36;
+  --text: #e6e3e0;
+  --text-muted: #9a938c;
+  --accent: #6b5843;
+  --accent-hover: #59492f;
+  --danger: #a85149;
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -97,7 +97,7 @@ button {
 }
 
 .auth-info {
-  color: #86efac;
+  color: #a3c17a;
   font-size: 0.9rem;
   margin: 0;
 }
@@ -288,7 +288,7 @@ button {
 }
 
 .device-tag-pc {
-  background: #0ea5e9;
+  background: #55534e;
 }
 
 .toolbar {
@@ -402,22 +402,22 @@ button {
 }
 
 .file-icon-image {
-  color: #34d399;
+  color: #7fae5c;
 }
 .file-icon-video {
-  color: #f472b6;
+  color: #c97b45;
 }
 .file-icon-audio {
-  color: #a78bfa;
+  color: #c9a24c;
 }
 .file-icon-document {
-  color: #60a5fa;
+  color: #a9906f;
 }
 .file-icon-archive {
-  color: #fbbf24;
+  color: #b6813a;
 }
 .file-icon-generic {
-  color: #94a3b8;
+  color: #9c9186;
 }
 
 /* --- Details pane --- */

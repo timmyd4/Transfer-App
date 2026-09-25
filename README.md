@@ -358,7 +358,8 @@ push code, and the live site updates itself within a minute or two.
   Chrome/Edge/Brave and lets the app open in its own window instead of a
   browser tab.
 - **`public/pwa-192x192.png`, `public/pwa-512x512.png`** — the placeholder
-  app icons (a white "T" on indigo) referenced by that manifest. Generated
+  app icons (a light "T" on a dark charcoal square) referenced by that
+  manifest. Generated
   as raw PNG bytes by a one-off script rather than a design tool, since
   they're meant as a placeholder you can swap out later.
 
